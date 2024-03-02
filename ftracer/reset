@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -xe
+
+self_dir=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
+.   "$self_dir/detail/common"
+
+reset_event
+
+reset_kprobe
+
+reset_uprobe
+
+echo nop > "$tracefs/current_tracer"
+echo 0 > "$tracefs/tracing_on"
+
