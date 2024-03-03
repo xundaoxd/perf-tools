@@ -82,10 +82,16 @@ std::uint64_t GetEventId(const std::string &e) {
   for (auto beg = e.begin(), end = e.end(); beg != end;) {
     auto it = std::find(beg, end, ':');
     path += "/" + e.substr(beg - e.begin(), it - beg);
-    beg = it;
+    if (it == end) {
+      break;
+    }
+    beg = it + 1;
   }
   path += "/id";
   std::ifstream ifs(path);
+  if (!ifs.good()) {
+    throw std::system_error(errno, std::generic_category());
+  }
   std::uint64_t id;
   ifs >> id;
   return id;
@@ -168,8 +174,11 @@ void InitPerfEvents(std::vector<std::unique_ptr<PerfEvent>> &pevents, int argc,
       pe.sample_type = PERF_SAMPLE_TIME;
 
       while (idx < pflags.size() && pflags[idx] != "-e") {
-        if (pflags[idx] == "--period") {
+        if (pflags[idx] == "--sample_period") {
           pe.sample_period = std::stoul(pflags[idx + 1]);
+          idx += 2;
+        } else if (pflags[idx] == "--wakeup_events") {
+          pe.wakeup_events = std::stoul(pflags[idx + 1]);
           idx += 2;
         } else {
           throw std::runtime_error("unknown event flag " + pflags[idx]);
