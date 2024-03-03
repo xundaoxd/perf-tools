@@ -68,8 +68,8 @@ struct PerfEvent {
       switch (header->type) {
       case PERF_RECORD_SAMPLE: {
         std::uint64_t *fields = (std::uint64_t *)(header + 1);
-        std::uint64_t tm = fields[0];
-        std::uint64_t value = fields[1];
+        std::uint64_t &tm = fields[0];
+        std::uint64_t &value = fields[1];
         *os << pid << '\t' << event << '\t' << tm << '\t' << value << '\n';
       } break;
       default: {
