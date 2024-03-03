@@ -15,11 +15,16 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <system_error>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+
+bool running{true};
+std::string tracefs("/sys/kernel/tracing");
+std::ostream *os;
 
 struct PerfEvent {
   int pid;
@@ -63,19 +68,18 @@ struct PerfEvent {
       switch (header->type) {
       case PERF_RECORD_SAMPLE: {
         std::uint64_t *fields = (std::uint64_t *)(header + 1);
-        std::cout << event << "\t" << pid << "\t" << fields[0] << '\n';
+        std::uint64_t tm = fields[0];
+        std::uint64_t value = fields[1];
+        *os << pid << '\t' << event << '\t' << tm << '\t' << value << '\n';
       } break;
       default: {
-        std::cout << "unknown type " << header->type << std::endl;
+        *os << "unknown type " << header->type << std::endl;
       } break;
       }
       info->data_tail += header->size;
     }
   }
 };
-
-bool running{true};
-std::string tracefs("/sys/kernel/tracing");
 
 std::uint64_t GetEventId(const std::string &e) {
   std::string path = tracefs + "/events";
@@ -171,7 +175,7 @@ void InitPerfEvents(std::vector<std::unique_ptr<PerfEvent>> &pevents, int argc,
 
       pe.sample_period = 1;
       pe.wakeup_events = 1;
-      pe.sample_type = PERF_SAMPLE_TIME;
+      pe.sample_type = PERF_SAMPLE_TIME | PERF_SAMPLE_READ;
 
       while (idx < pflags.size() && pflags[idx] != "-e") {
         if (pflags[idx] == "--sample_period") {
@@ -204,6 +208,21 @@ void InitPerfEvents(std::vector<std::unique_ptr<PerfEvent>> &pevents, int argc,
 int main(int argc, char *argv[]) {
   std::signal(SIGINT, [](int) { running = false; });
   std::signal(SIGTERM, [](int) { running = false; });
+  os = &std::cout;
+
+  std::ofstream ofs;
+  for (auto idx = 1; idx < argc;) {
+    if (strcmp(argv[idx], "--tracefs") == 0) {
+      tracefs = argv[idx + 1];
+      idx += 2;
+    } else if (strcmp(argv[idx], "--output") == 0) {
+      ofs.open(argv[idx + 1]);
+      os = &ofs;
+      idx += 2;
+    } else {
+      idx++;
+    }
+  }
 
   std::vector<std::unique_ptr<PerfEvent>> pevents;
   InitPerfEvents(pevents, argc, argv);
