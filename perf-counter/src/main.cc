@@ -238,8 +238,13 @@ int main(int argc, char *argv[]) {
     }
     pe->Enable();
   }
+
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGINT);
+  sigaddset(&set, SIGTERM);
   while (running) {
-    int nfds = epoll_pwait(epollfd, events.data(), events.size(), -1, nullptr);
+    int nfds = epoll_pwait(epollfd, events.data(), events.size(), -1, &set);
     if (nfds == -1) {
       throw std::system_error(errno, std::generic_category());
     }
