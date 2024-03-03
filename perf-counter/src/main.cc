@@ -103,7 +103,8 @@ std::uint64_t GetEventId(const std::string &e) {
 
 void InitPerfEvents(std::vector<std::unique_ptr<PerfEvent>> &pevents, int argc,
                     char *argv[]) {
-  std::vector<std::string> common_flags;
+  std::vector<std::string> common_flags{"--sample_period", "1",
+                                        "--wakeup_events", "1"};
   int idx = 1;
   while (strcmp(argv[idx], "--pid") != 0) {
     common_flags.emplace_back(argv[idx++]);
@@ -173,8 +174,6 @@ void InitPerfEvents(std::vector<std::unique_ptr<PerfEvent>> &pevents, int argc,
       pe.exclude_hv = 1;
       pe.exclude_guest = 1;
 
-      pe.sample_period = 1;
-      pe.wakeup_events = 1;
       pe.sample_type = PERF_SAMPLE_TIME | PERF_SAMPLE_READ;
 
       while (idx < pflags.size() && pflags[idx] != "-e") {
