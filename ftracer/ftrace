@@ -2,7 +2,120 @@
 set -e
 
 self_dir=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
-.   "$self_dir/detail/common"
+.   "$self_dir/common"
+
+
+tracefs="/sys/kernel/debug/tracing"
+declare -a args=()
+
+do_help() {
+    # TODO: impl
+    die "empty"
+}
+
+# do_uprobe 'p:asd /bin/bash:0x4245c0'
+do_uprobe() {
+    if ((${#args[@]} < 2)); then
+        die "broken uprobe args"
+    fi
+    local -a uprobe
+    read -r -a uprobe <<< "${args[1]}"
+    args=("${args[@]:2}")
+
+    echo "${uprobe[*]}" >> "$tracefs/uprobe_events"
+    run_atexit "echo -:${uprobe[0]#*:} >> $tracefs/uprobe_events"
+}
+
+# do_kprobe 'p:myopen do_sys_open filename=+0(%si):string'
+do_kprobe() {
+    if ((${#args[@]} < 2)); then
+        die "broken kprobe args"
+    fi
+    local -a kprobe
+    read -r -a kprobe <<< "${args[1]}"
+    args=("${args[@]:2}")
+
+    echo "${kprobe[*]}" >> "$tracefs/kprobe_events"
+    run_atexit "echo -:${kprobe[0]#*:} >> $tracefs/kprobe_events"
+}
+
+# do_event 'kmem:mm_page_alloc'
+do_event() {
+    if ((${#args[@]} < 2)); then
+        die "broken event args"
+    fi
+    local event="${args[1]}"
+    local epath="${event//://}"
+    args=("${args[@]:2}")
+
+    while ((${#args[@]})); do
+        case ${args[0]} in
+            -f | --filter)
+                echo "${args[1]}" > "$tracefs/events/$epath/filter"
+                args=("${args[@]:2}")
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    echo "$event" >> "$tracefs/set_event"
+    run_atexit "echo '!$event' >> $tracefs/set_event"
+}
+
+# do_tracer "tracer"
+do_tracer() {
+    # TODO: impl
+    die "empty"
+}
+
+main() {
+    args=("$@")
+    while ((${#args[@]})); do
+        case ${args[0]} in
+            -h | --help)
+                do_help
+                exit
+                ;;
+            -ls-event)
+                cat $tracefs/available_events
+                shift
+                exit
+                ;;
+            -ls-filter)
+                cat $tracefs/available_filter_functions
+                shift
+                exit
+                ;;
+            -ls-tracer)
+                cat $tracefs/available_tracers
+                shift
+                exit
+                ;;
+            -u | --uprobe)
+                do_uprobe
+                ;;
+            -k | --kprobe)
+                do_kprobe
+                ;;
+            -e | --event)
+                do_event
+                ;;
+            --tracer)
+                do_tracer
+                ;;
+            *)
+                break;
+                ;;
+        esac
+    done
+
+    echo 1 > $tracefs/tracing_on
+    run_atexit "echo 0 > $tracefs/tracing_on"
+    cat "$tracefs/trace_pipe"
+}
+
 
 main "$@"
 

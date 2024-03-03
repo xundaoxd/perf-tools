@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -e
+
+
+die() {
+    echo "$@" >&2
+    exit 1
+}
+
+post_hooks=()
+atexit() {
+    for ((i = ${#post_hooks[@]} - 1; i >= 0; i--)) {
+        if ! eval "${post_hooks[i]}"; then
+            die "WARNING: command failed \"${post_hooks[i]}\""
+        fi
+    }
+}
+trap atexit EXIT
+run_atexit() {
+    post_hooks+=("$*")
+}
