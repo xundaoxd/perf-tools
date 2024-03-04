@@ -5,54 +5,65 @@ self_dir=$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
 .   "$self_dir/common"
 
 
-tracefs="/sys/kernel/debug/tracing"
-declare -a args=()
+opt_tracefs="/sys/kernel/debug/tracing"
+opt_args=()
 
 do_help() {
-    # TODO: impl
-    die "empty"
+    echo "usage ftrace  [--ls-event] [--ls-filter] [--inspect-event event] [--ls-tracer]"
+    echo "              [--tracer | -t t]"
+    echo "              [--kprobe | -k k]"
+    echo "              [--uprobe | -u u]"
+    echo "              [--event | -e e [-f filter]]"
+    echo "              [-h|--help]"
 }
 
 # do_uprobe 'p:asd /bin/bash:0x4245c0'
 do_uprobe() {
-    if ((${#args[@]} < 2)); then
-        die "broken uprobe args"
+    if ((${#opt_args[@]} < 2)); then
+        die "broken uprobe opt_args"
     fi
     local -a uprobe
-    read -r -a uprobe <<< "${args[1]}"
-    args=("${args[@]:2}")
+    read -r -a uprobe <<< "${opt_args[1]}"
+    opt_args=("${opt_args[@]:2}")
+    if [[ "${uprobe[1]#*:}" != 0x* ]]; then
+        local -a prog
+        IFS=":" read -r -a prog <<< "${uprobe[1]}"
+        prog[1]="$(get_sym_addr "${prog[0]}" "${prog[1]}")"
+        IFS=":" uprobe[1]="${prog[*]}"
+    fi
 
-    echo "${uprobe[*]}" >> "$tracefs/uprobe_events"
-    run_atexit "echo -:${uprobe[0]#*:} >> $tracefs/uprobe_events"
+    echo "${uprobe[*]}" >> "$opt_tracefs/uprobe_events"
+    run_atexit "echo -:${uprobe[0]#*:} >> $opt_tracefs/uprobe_events"
 }
 
 # do_kprobe 'p:myopen do_sys_open filename=+0(%si):string'
 do_kprobe() {
-    if ((${#args[@]} < 2)); then
-        die "broken kprobe args"
+    if ((${#opt_args[@]} < 2)); then
+        die "broken kprobe opt_args"
     fi
     local -a kprobe
-    read -r -a kprobe <<< "${args[1]}"
-    args=("${args[@]:2}")
+    read -r -a kprobe <<< "${opt_args[1]}"
+    opt_args=("${opt_args[@]:2}")
 
-    echo "${kprobe[*]}" >> "$tracefs/kprobe_events"
-    run_atexit "echo -:${kprobe[0]#*:} >> $tracefs/kprobe_events"
+    echo "${kprobe[*]}" >> "$opt_tracefs/kprobe_events"
+    run_atexit "echo -:${kprobe[0]#*:} >> $opt_tracefs/kprobe_events"
 }
 
-# do_event 'kmem:mm_page_alloc'
+# do_event 'kmem:mm_page_alloc' -f filter
 do_event() {
-    if ((${#args[@]} < 2)); then
-        die "broken event args"
+    if ((${#opt_args[@]} < 2)); then
+        die "broken event opt_args"
     fi
-    local event="${args[1]}"
+    local event="${opt_args[1]}"
     local epath="${event//://}"
-    args=("${args[@]:2}")
+    opt_args=("${opt_args[@]:2}")
 
-    while ((${#args[@]})); do
-        case ${args[0]} in
+    while ((${#opt_args[@]})); do
+        case ${opt_args[0]} in
             -f | --filter)
-                echo "${args[1]}" > "$tracefs/events/$epath/filter"
-                args=("${args[@]:2}")
+                echo "${opt_args[1]}" > "$opt_tracefs/events/$epath/filter"
+                run_atexit "echo 0 > $opt_tracefs/events/$epath/filter"
+                opt_args=("${opt_args[@]:2}")
                 ;;
             *)
                 break
@@ -60,38 +71,68 @@ do_event() {
         esac
     done
 
-    echo "$event" >> "$tracefs/set_event"
-    run_atexit "echo '!$event' >> $tracefs/set_event"
+    echo "$event" >> "$opt_tracefs/set_event"
+    run_atexit "echo '!$event' >> $opt_tracefs/set_event"
 }
 
-# do_tracer "tracer"
+# do_tracer "tracer" -f filter
 do_tracer() {
-    # TODO: impl
-    die "empty"
+    if ((${#opt_args[@]} < 2)); then
+        die "broken event tracer "
+    fi
+    local tracer="${opt_args[1]}"
+    opt_args=("${opt_args[@]:2}")
+
+    while ((${#opt_args[@]})); do
+        case ${opt_args[0]} in
+            -f | --filter)
+                echo "${opt_args[1]}" >> "$opt_tracefs/set_ftrace_filter"
+                run_atexit "echo !${opt_args[1]} >> $opt_tracefs/set_ftrace_filter"
+                opt_args=("${opt_args[@]:2}")
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    echo "$tracer" > "$opt_tracefs/current_tracer"
+    run_atexit "echo nop > '$opt_tracefs/current_tracer'"
 }
 
 main() {
-    args=("$@")
-    while ((${#args[@]})); do
-        case ${args[0]} in
+    opt_args=("$@")
+    while ((${#opt_args[@]})); do
+        case ${opt_args[0]} in
             -h | --help)
                 do_help
                 exit
                 ;;
-            -ls-event)
-                cat $tracefs/available_events
+            --ls-event)
+                cat "$opt_tracefs/available_events"
                 shift
                 exit
                 ;;
-            -ls-filter)
-                cat $tracefs/available_filter_functions
+            --inspect-event)
+                local event="${opt_args[1]}"
+                local epath="${event//://}"
+                opt_args=("${opt_args[@]:2}")
+                cat "$opt_tracefs/events/$epath/format"
+                exit
+                ;;
+            --ls-filter)
+                cat "$opt_tracefs/available_filter_functions"
                 shift
                 exit
                 ;;
-            -ls-tracer)
-                cat $tracefs/available_tracers
+            --ls-tracer)
+                cat "$opt_tracefs/available_tracers"
                 shift
                 exit
+                ;;
+            --tracefs)
+                opt_tracefs="${opt_args[1]}"
+                opt_args=("${opt_args[@]:2}")
                 ;;
             -u | --uprobe)
                 do_uprobe
@@ -102,7 +143,7 @@ main() {
             -e | --event)
                 do_event
                 ;;
-            --tracer)
+            -t | --tracer)
                 do_tracer
                 ;;
             *)
@@ -111,9 +152,9 @@ main() {
         esac
     done
 
-    echo 1 > $tracefs/tracing_on
-    run_atexit "echo 0 > $tracefs/tracing_on"
-    cat "$tracefs/trace_pipe"
+    echo 1 > "$opt_tracefs/tracing_on"
+    run_atexit "echo 0 > $opt_tracefs/tracing_on"
+    cat "$opt_tracefs/trace_pipe"
 }
 
 
