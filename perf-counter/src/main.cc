@@ -24,7 +24,6 @@
 
 bool running{true};
 std::string tracefs("/sys/kernel/tracing");
-std::ostream *os;
 
 struct PerfEvent {
   int pid;
@@ -70,10 +69,11 @@ struct PerfEvent {
         std::uint64_t *fields = (std::uint64_t *)(header + 1);
         std::uint64_t &tm = fields[0];
         std::uint64_t &value = fields[1];
-        *os << pid << '\t' << event << '\t' << tm << '\t' << value << '\n';
+        std::cout << pid << '\t' << event << '\t' << tm << '\t' << value
+                  << '\n';
       } break;
       default: {
-        *os << "unknown type " << header->type << std::endl;
+        std::cerr << "unknown type " << header->type << std::endl;
       } break;
       }
       info->data_tail += header->size;
@@ -156,7 +156,6 @@ void InitPerfEvents(std::vector<std::unique_ptr<PerfEvent>> &pevents, int argc,
           {"PERF_COUNT_SW_EMULATION_FAULTS", PERF_COUNT_SW_EMULATION_FAULTS},
           {"PERF_COUNT_SW_DUMMY", PERF_COUNT_SW_DUMMY},
           {"PERF_COUNT_SW_BPF_OUTPUT", PERF_COUNT_SW_BPF_OUTPUT},
-          {"PERF_COUNT_SW_CGROUP_SWITCHES", PERF_COUNT_SW_CGROUP_SWITCHES},
       };
       if (hw_events.count(e->event)) {
         pe.type = PERF_TYPE_HARDWARE;
@@ -207,16 +206,11 @@ void InitPerfEvents(std::vector<std::unique_ptr<PerfEvent>> &pevents, int argc,
 int main(int argc, char *argv[]) {
   std::signal(SIGINT, [](int) { running = false; });
   std::signal(SIGTERM, [](int) { running = false; });
-  os = &std::cout;
 
   std::ofstream ofs;
   for (auto idx = 1; idx < argc;) {
     if (strcmp(argv[idx], "--tracefs") == 0) {
       tracefs = argv[idx + 1];
-      idx += 2;
-    } else if (strcmp(argv[idx], "--output") == 0) {
-      ofs.open(argv[idx + 1]);
-      os = &ofs;
       idx += 2;
     } else {
       idx++;
