@@ -25,10 +25,8 @@ get_sym_addr() {
     local bin="$1"
     local sym="$2"
     local addr
-    addr=$(objdump -tT "${bin}" | awk -v sym="${sym}" '$NF == sym && $4 == ".text" {print $1;exit}')
-    [[ "$addr" == "" ]] && addr=$(objdump -tT -C "${bin}" | awk -v sym="${sym}" '$NF == sym && $4 == ".text" {print $1;exit}')
-    [[ "$addr" == "" ]] && die "missing sym: ${bin}:${sym}"
-    (( 0x$addr == 0 )) && die "failed resolve: ${bin}:${sym}"
-    addr=0x$(printf "%x" "0x$addr")
-    echo "$addr"
+    addr="0x$(objdump -tT "${bin}" | awk -v sym="${sym}" '$NF == sym && $4 == ".text" {print $1;exit}')"
+    [[ "${addr}" == "" ]] && die "missing sym: ${bin}:${sym}"
+    (( "${addr}" == 0 )) && die "failed resolve: ${bin}:${sym}"
+    echo "${addr}"
 }
