@@ -16,7 +16,7 @@ do_help() {
     echo "              [--tracer | -t t [-f filter]]"
     echo "              [--kprobe | -k k]"
     echo "              [--uprobe | -u u]"
-    echo "              [--event | -e e [-f filter]]"
+    echo "              [--event | -e e [-f filter] [-t trigger]]"
     echo "              [-h|--help]"
     echo "              [--tracefs dir]"
 }
@@ -78,7 +78,7 @@ do_uprobe() {
     run_atexit "echo -:${uprobe[0]#*:} >> $opt_tracefs/uprobe_events"
 }
 
-# -e|--event 'kmem:mm_page_alloc' -f filter ...
+# -e|--event 'kmem:mm_page_alloc' -f filter -t trigger ...
 do_event() {
     if ((${#opt_args[@]} < 2)); then
         die "broken event opt_args"
@@ -92,6 +92,11 @@ do_event() {
             -f | --filter)
                 echo "${opt_args[1]}" > "$opt_tracefs/events/$epath/filter"
                 run_atexit "echo 0 > $opt_tracefs/events/$epath/filter"
+                opt_args=("${opt_args[@]:2}")
+                ;;
+            -t | --trigger)
+                echo "${opt_args[1]}" > "$opt_tracefs/events/$epath/trigger"
+                run_atexit "echo '!${opt_args[1]}' > $opt_tracefs/events/$epath/trigger"
                 opt_args=("${opt_args[@]:2}")
                 ;;
             *)
