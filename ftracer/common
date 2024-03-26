@@ -32,3 +32,9 @@ get_sym_addr() {
     addr=0x$(printf "%x" "0x$addr")
     echo "$addr"
 }
+
+str_join() {
+    IFS="$1"
+    shift
+    echo "$*"
+}

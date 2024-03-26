@@ -29,7 +29,7 @@ do_uprobe() {
         local -a prog
         IFS=":" read -r -a prog <<< "${uprobe[1]}"
         prog[1]="$(get_sym_addr "${prog[0]}" "${prog[1]}")"
-        IFS=":" uprobe[1]="${prog[*]}"
+        uprobe[1]=`str_join : "${prog[@]}"`
     fi
 
     echo "${uprobe[*]}" >> "$opt_tracefs/uprobe_events"
